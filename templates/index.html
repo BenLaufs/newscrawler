@@ -1,0 +1,113 @@
+{% extends "layout.html" %}
+
+{% block title %}
+
+  newsticker
+
+{% endblock %}
+
+{% block body %}
+    <h2>newsticker</h2>
+
+    <div>
+    <form id="triggers">
+        <input class= "input_box" id="new_trigger_name" autocomplete="off" autofocus placeholder="search RSS feeds" type="text">
+        <button id="new_trigger_search" type="submit"> search item </button>
+        <button id="standard_trigger_search" type="submit"> search standard items </button>
+    </form>
+    </div>
+
+    &nbsp
+    <div>Status: <span id="connected" class="connected"></span><span id="story_counter" class="connected"></span></div>
+    &nbsp
+
+    <h3> results </h3>
+
+    <div id="stories" class="stories">
+    </div>
+
+    <script>
+        // By default, submit button is disabled
+        document.querySelector('#new_trigger_search').disabled = true;
+
+        // Enable button only if there is text in the input field
+        document.querySelector('#new_trigger_name').onkeyup = () => {
+            if (document.querySelector('#new_trigger_name').value.length > 0)
+                document.querySelector('#new_trigger_search').disabled = false;
+            else
+                document.querySelector('#new_trigger_search').disabled = true;
+        };
+    </script>
+
+    <script type="text/javascript" src="//cdnjs.cloudflare.com/ajax/libs/socket.io/1.3.6/socket.io.min.js"></script>
+
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/handlebars.js/4.0.11/handlebars.min.js"></script>
+
+    <script id="post" type="text/x-handlebars-template">
+      {% raw -%}
+        <div class="story">
+          <a href= "{{story_url}}" target="_blank"> Trigger: {{trigger}} - {{story_name}} </a>
+          <ul>Publikationsdatum: {{story_date}}</ul>
+          <ul>{{story_summary}}</ul>
+        </div>
+      {%- endraw %}
+    </script>
+
+    <script>
+      // Connect to websocket
+      var socket = io.connect(location.protocol + '//' + document.domain + ':' + location.port);
+
+      // When connected, configure submit button
+      socket.on('connect', () => {
+          document.querySelector('#new_trigger_search').onclick = () => {
+                  document.querySelector('#connected').innerHTML = " scraping..!"
+                  document.querySelector('#story_counter').innerHTML = ""
+                  const trigger = document.querySelector('#new_trigger_name').value;
+                  socket.emit('search', {'trigger': trigger});
+                  return false;
+          };
+          document.querySelector('#standard_trigger_search').onclick = () => {
+                  document.querySelector('#connected').innerHTML = " scraping..!"
+                  document.querySelector('#story_counter').innerHTML = ""
+                  socket.emit('search', {'trigger': "none"});
+                  return false;
+          };
+      });
+
+      // show relevant stories
+      socket.on('show stories', data => {
+            const story_counter = data.story_counter;
+            document.querySelector('#connected').innerHTML = "# searched stories: "
+            document.querySelector('#story_counter').innerHTML = story_counter
+            const stories  = data.stories_name;
+            const dates  = data.stories_date;
+            const summaries  = data.stories_summary;
+            const urls = data.stories_url;
+            const triggers = data.triggers;
+            const number_stories = stories.length;
+
+            // Create new item for stories list
+            for (var c = 0; c < number_stories; ++c) {
+              const story_name = stories[c];
+              const story_date = dates[c];
+              const story_summary = summaries[c];
+              const story_url = urls[c];
+              const trigger = triggers[c];
+              // Add new item to DOM
+              add_post(trigger, story_name, story_date, story_summary, story_url);
+            }
+            // Clear input field and disable button again
+            document.querySelector('#new_trigger_name').value = '';
+            document.querySelector('#new_trigger_search').disabled = true;
+          });
+
+          // Add a new post with given contents to DOM.
+          const post_template = Handlebars.compile(document.querySelector('#post').innerHTML);
+          function add_post(trigger, story_name, story_date, story_summary, story_url) {
+            // Create new post.
+            const post = post_template({'trigger': trigger,'story_name': story_name, 'story_date': story_date, 'story_summary': story_summary,'story_url': story_url});
+            // Add post to DOM.
+            document.querySelector('#stories').innerHTML = post + document.querySelector('#stories').innerHTML;
+            }
+    </script>
+{% endblock %}
